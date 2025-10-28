@@ -1,7 +1,75 @@
-import React, { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import { Card, CardContent, Button, Input, Badge } from "./ui";
 import { Upload, RotateCcw, FileSearch, Sparkles } from "lucide-react";
 import Papa from "papaparse";
+
+// --- Types & shims ---
+type Row = Record<string, string>;
+type ParsedCsv = { rows: Row[]; headers: string[] };
+type Answers = Record<string, string>;
+
+interface ContactInfo {
+  companyName: string;
+  contactName: string;
+  companyAddress: string;
+  contactPhone: string;
+  contactEmail: string;
+  consent?: boolean;
+}
+
+declare global {
+  interface Window {
+    google?: any;
+  }
+}
+
+
+// --- Utility funcitons ---
+// --- Utility: Convert state abbreviations like "IL" -> "Illinois" ---
+function stateFromInput(input: string): string {
+  const states: Record<string, string> = {
+    AL: "Alabama", AK: "Alaska", AZ: "Arizona", AR: "Arkansas", CA: "California",
+    CO: "Colorado", CT: "Connecticut", DE: "Delaware", FL: "Florida", GA: "Georgia",
+    HI: "Hawaii", ID: "Idaho", IL: "Illinois", IN: "Indiana", IA: "Iowa",
+    KS: "Kansas", KY: "Kentucky", LA: "Louisiana", ME: "Maine", MD: "Maryland",
+    MA: "Massachusetts", MI: "Michigan", MN: "Minnesota", MS: "Mississippi",
+    MO: "Missouri", MT: "Montana", NE: "Nebraska", NV: "Nevada", NH: "New Hampshire",
+    NJ: "New Jersey", NM: "New Mexico", NY: "New York", NC: "North Carolina",
+    ND: "North Dakota", OH: "Ohio", OK: "Oklahoma", OR: "Oregon", PA: "Pennsylvania",
+    RI: "Rhode Island", SC: "South Carolina", SD: "South Dakota", TN: "Tennessee",
+    TX: "Texas", UT: "Utah", VT: "Vermont", VA: "Virginia", WA: "Washington",
+    WV: "West Virginia", WI: "Wisconsin", WY: "Wyoming",
+  };
+  const key = input.trim().toUpperCase();
+  return states[key] || input.trim();
+}
+
+// --- Utility: Filter rows from the CSV by all answers ---
+function filterRows(rows: Row[], answers: Record<string, string>): Row[] {
+  return rows.filter((row) =>
+    Object.entries(answers).every(([key, answer]) => {
+      if (!answer) return true;
+      const val = (row[key] || "").toString().toLowerCase();
+      return val.includes(answer.toLowerCase());
+    })
+  );
+}
+
+// --- Utility: Convert filtered rows back into downloadable CSV format ---
+function toCsv(rows: Row[], headers: string[]): string {
+  const cols = headers.length ? headers : Object.keys(rows[0] || {});
+  const escape = (s: string) => {
+    const needsQuotes = /[",\n]/.test(s);
+    const escaped = s.replace(/"/g, '""');
+    return needsQuotes ? `"${escaped}"` : s;
+  };
+  const lines = [cols.join(",")];
+  for (const r of rows) {
+    lines.push(cols.map((c) => escape(String(r[c] ?? ""))).join(","));
+  }
+  return lines.join("\n");
+}
+
 
 /**
  * CSV Chatbot (text-only) — decision & purchase flow + back buttons + validation + address autocomplete
@@ -61,7 +129,7 @@ function interpretAnswer(qid, raw) {
   return raw;
 }
 
-function parseCsv(file) {
+function parseCsv(file: File): Promise<ParsedCsv> {
   return new Promise((resolve, reject) => {
     Papa.parse(file, {
       header: true,
@@ -76,9 +144,9 @@ function parseCsv(file) {
   });
 }
 
-function normalize(v) { return (v ?? "").toString().trim().toLowerCase(); }
+function normalize(v: string) { return (v ?? "").toString().trim().toLowerCase(); }
 
-function matches(row, q, answer) {
+function matches(row: Row, q: { csvColumn: string; mode: "equals" | "contains" | "gte" | "lte" }, answer: string): boolean {
   if (!q.csvColumn) return true;
   const raw = row[q.csvColumn];
   if (raw === undefined) return false;
@@ -148,13 +216,13 @@ function AddressAutocomplete({ value, onChange, placeholder }) {
 
 export default function CsvChatbotExtended() {
   const fileRef = useRef(null);
-  const [csv, setCsv] = useState(null);
+  const [csv, setCsv] = useState<ParsedCsv | null>(null);
 
   const [phase, setPhase] = useState("qa"); // qa → summary → purchase → consent → delivery → done
 
   // QA state
   const [step, setStep] = useState(0);
-  const [answers, setAnswers] = useState({});
+  const [answers, setAnswers] = useState<Answers>({});
   const [input, setInput] = useState("");
   const [qError, setQError] = useState("");
 
@@ -247,6 +315,13 @@ export default function CsvChatbotExtended() {
     if (yes) setPhase("purchase");
     else setPhase("qa");
   }
+
+  const InquiryBlock: React.FC<{ answers: Answers }> = ({ answers }) => (
+  <div style={{ border: "1px dashed #cbd5e1", padding: 12, borderRadius: 12 }}>
+    <div className="text-sm">No exact match found. We’ll route this inquiry to a service rep.</div>
+    <pre style={{ fontSize: 12, marginTop: 8 }}>{JSON.stringify(answers, null, 2)}</pre>
+  </div>
+);
 
   // Purchase step flow
   const curField = PURCHASE_FIELDS[pStep];
