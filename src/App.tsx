@@ -263,8 +263,7 @@ export default function CsvChatbotExtended() {
     run();
   }, [phase, answers.q1, answers.q2, answers.q3, answers.q4]);
 
-  const premiumDisplay = useMemo(() => (primary ? formatMoney(primary.premium ?? "—") : "—"), [primary]);
-
+ 
   /** ---------- UI ---------- */
   return (
     <div className="min-h-screen sm:p-6 p-4 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-200">
