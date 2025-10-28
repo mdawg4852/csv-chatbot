@@ -1,4 +1,10 @@
-import { cn } from "./utils";
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
+
+// Utility function for joining class names
+function cn(...classes: (string | false | null | undefined)[]) {
+  return classes.filter(Boolean).join(" ");
+}
+
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 
 /* ------------------------- Button ------------------------- */
