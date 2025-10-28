@@ -1,16 +1,8 @@
-import { useMemo, useRef, useState, useEffect, ChangeEvent } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
+import type { ChangeEvent } from "react";
 import { Card, CardContent, Button, Input, Badge } from "./ui";
 import { Upload, RotateCcw, FileSearch, Sparkles } from "lucide-react";
 import Papa from "papaparse";
-
-/** ------------------------------------------------------------------
- * Minimal type shim for papaparse in case @types/papaparse isn't installed.
- * (You should still run: npm i -D @types/papaparse)
- * ------------------------------------------------------------------ */
-declare module "papaparse" {
-  const x: any;
-  export default x;
-}
 
 // --- Types & shims ---
 type Row = Record<string, string>;
@@ -116,7 +108,7 @@ function matches(
   const ans = interpretAnswer(q.id, answer);
   const a = normalize(ans);
   const rv = normalize(String(raw));
-  // For now we only use "equals" for exact match per requirements
+  // Per requirements: exact match
   return rv === a;
 }
 
@@ -126,28 +118,15 @@ function strictMatch(rows: Row[], answers: Answers): Row[] {
   return rows.filter(row => qs.every(q => matches(row, q, answers[q.id] || "")));
 }
 
-// Build CSV string for export if needed
-function toCsv(rows: Row[], headers: string[]): string {
-  const cols = headers.length ? headers : Object.keys(rows[0] || {});
-  const escape = (s: string) => {
-    const needsQuotes = /[",\n]/.test(s);
-    const escaped = s.replace(/"/g, '""');
-    return needsQuotes ? `"${escaped}"` : s;
-  };
-  const lines = [cols.join(",")];
-  for (const r of rows) lines.push(cols.map((c) => escape(String(r[c] ?? ""))).join(","));
-  return lines.join("\n");
-}
-
 // CSV parsing
 function parseCsv(file: File): Promise<ParsedCsv> {
   return new Promise((resolve, reject) => {
-    (Papa as any).parse(file, {
+    Papa.parse<Row>(file, {
       header: true,
       skipEmptyLines: true,
-      complete: (results: any) => {
-        const rows: Row[] = (results.data || []).filter(Boolean);
-        const headers: string[] = results.meta?.fields || Object.keys(rows[0] || {});
+      complete: (results) => {
+        const rows = (results.data || []).filter(Boolean);
+        const headers = results.meta?.fields || Object.keys(rows[0] || {});
         resolve({ rows, headers });
       },
       error: reject,
@@ -316,11 +295,6 @@ export default function CsvChatbotExtended() {
     setQError("");
   }
 
-  function proceedDecision(yes: boolean) {
-    if (yes) setPhase("purchase");
-    else setPhase("qa");
-  }
-
   // Purchase step flow
   const curField = PURCHASE_FIELDS[pStep];
   function nextPurchase() {
@@ -426,7 +400,7 @@ export default function CsvChatbotExtended() {
                 onChange={(e) => setInput((e.target as HTMLInputElement).value)}
                 type={currentQ.inputType}
                 placeholder={currentQ.placeholder}
-                min={currentQ.id === "q5" ? todayYMD() : undefined}
+                min={currentQ.id === "q5" ? minDate : undefined}
                 max={currentQ.id === "q5" ? maxDate : undefined}
                 onKeyDown={(e) => e.key === "Enter" && submitAnswer()}
               />
@@ -529,7 +503,9 @@ export default function CsvChatbotExtended() {
           <Card>
             <CardContent className="p-6 space-y-3">
               <div className="font-semibold">Text & Call Consent</div>
-              <p className="text-sm text-slate-600">{disclaimer}</p>
+              <p className="text-sm text-slate-600">
+                By providing your phone number, you consent to receive calls and text messages related to your bond and related services, including payment and renewal reminders. Message and data rates may apply. Consent is not a condition of purchase. You can opt out at any time by replying STOP.
+              </p>
               <div className="flex gap-2">
                 <Button onClick={() => setPhase("delivery")}>I Agree</Button>
                 <Button variant="secondary" onClick={() => setPhase("delivery")}>I Do Not Agree</Button>
