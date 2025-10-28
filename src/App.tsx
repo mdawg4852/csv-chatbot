@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, Button, Input, Badge } from "./ui";
 import { RotateCcw, FileSearch, Sparkles } from "lucide-react";
 import { supabase } from "./supabaseClient";
