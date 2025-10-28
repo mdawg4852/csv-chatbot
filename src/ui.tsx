@@ -1,74 +1,107 @@
-import React, { forwardRef } from "react";
+import { cn } from "./utils";
+import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 
-type BaseProps = { className?: string; children?: React.ReactNode };
+/* ------------------------- Button ------------------------- */
+interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+  variant?: "default" | "secondary";
+  size?: "sm" | "md" | "lg";
+}
 
-export function Card({ children, className }: BaseProps) {
+export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
+  ({ className, variant = "default", size = "md", ...props }, ref) => {
+    const base =
+      "inline-flex items-center justify-center rounded-xl font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none";
+    const variants = {
+      default:
+        "bg-blue-600 text-white hover:bg-blue-700 focus-visible:ring-blue-500 dark:bg-blue-500 dark:hover:bg-blue-400",
+      secondary:
+        "bg-slate-100 text-slate-900 hover:bg-slate-200 focus-visible:ring-slate-500 dark:bg-slate-800 dark:text-slate-100 dark:hover:bg-slate-700",
+    };
+    const sizes = {
+      sm: "px-3 py-1.5 text-sm",
+      md: "px-4 py-2 text-base",
+      lg: "px-6 py-3 text-lg",
+    };
+    return (
+      <button
+        ref={ref}
+        className={cn(base, variants[variant], sizes[size], className)}
+        {...props}
+      />
+    );
+  }
+);
+Button.displayName = "Button";
+
+/* ------------------------- Input ------------------------- */
+interface InputProps extends InputHTMLAttributes<HTMLInputElement> {}
+
+export const Input = forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        ref={ref}
+        className={cn(
+          "flex w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:placeholder-slate-400",
+          className
+        )}
+        {...props}
+      />
+    );
+  }
+);
+Input.displayName = "Input";
+
+/* ------------------------- Card ------------------------- */
+export function Card({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={className}
-      style={{ border: "1px solid #e5e7eb", borderRadius: 16, background: "#fff" }}
-    >
-      {children}
-    </div>
-  );
-}
-
-export function CardContent({ children, className }: BaseProps) {
-  return <div className={className} style={{ padding: 24 }}>{children}</div>;
-}
-
-type ButtonProps = BaseProps & {
-  onClick?: () => void;
-  variant?: "default" | "secondary";
-  disabled?: boolean;
-  size?: "sm" | "md";
-};
-
-export function Button({ children, onClick, variant = "default", disabled, className, size = "md" }: ButtonProps) {
-  const style: React.CSSProperties = {
-    padding: size === "sm" ? "6px 10px" : "8px 12px",
-    borderRadius: 10,
-    border: "1px solid #e5e7eb",
-    background: variant === "secondary" ? "#f3f4f6" : "#111827",
-    color: variant === "secondary" ? "#111827" : "#fff",
-    opacity: disabled ? 0.6 : 1,
-    cursor: disabled ? "not-allowed" : "pointer",
-  };
-  return (
-    <button onClick={onClick} disabled={disabled} className={className} style={style}>
-      {children}
-    </button>
-  );
-}
-
-type InputProps = React.InputHTMLAttributes<HTMLInputElement> & { className?: string };
-
-export const Input = forwardRef<HTMLInputElement, InputProps>(function Input(
-  { className, ...rest },
-  ref
-) {
-  return (
-    <input
-      ref={ref}
-      className={className}
-      style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #e5e7eb" }}
-      {...rest}
+      className={cn(
+        "rounded-2xl border border-slate-200 bg-white shadow-md dark:border-slate-800 dark:bg-slate-900",
+        className
+      )}
+      {...props}
     />
   );
-});
+}
 
-export function Badge({ children, className, variant = "default" }: BaseProps & { variant?: "default" | "outline" | "secondary" }) {
-  const styles: Record<string, React.CSSProperties> = {
-    default: { background: "#111827", color: "#fff", border: "1px solid #111827" },
-    outline: { background: "#fff", color: "#111827", border: "1px solid #e5e7eb" },
-    secondary: { background: "#e5e7eb", color: "#111827", border: "1px solid #e5e7eb" },
+export function CardContent({
+  className,
+  ...props
+}: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div className={cn("p-6 sm:p-8 text-slate-900 dark:text-slate-100", className)} {...props} />
+  );
+}
+
+/* ------------------------- Badge ------------------------- */
+interface BadgeProps extends React.HTMLAttributes<HTMLSpanElement> {
+  variant?: "default" | "outline";
+}
+
+export function Badge({ className, variant = "default", ...props }: BadgeProps) {
+  const variants = {
+    default: "bg-blue-600 text-white",
+    outline:
+      "border border-slate-300 text-slate-700 dark:border-slate-700 dark:text-slate-200",
   };
   return (
     <span
-      className={className}
-      style={{ ...styles[variant], padding: "3px 8px", borderRadius: 999, fontSize: 12 }}
-    >
-      {children}
-    </span>
+      className={cn(
+        "inline-flex items-center rounded-full px-3 py-0.5 text-xs font-semibold",
+        variants[variant],
+        className
+      )}
+      {...props}
+    />
   );
+}
+
+/* ------------------------- Utils ------------------------- */
+export function cn(...classes: (string | false | null | undefined)[]) {
+  return classes.filter(Boolean).join(" ");
 }
