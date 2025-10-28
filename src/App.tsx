@@ -3,6 +3,7 @@ import type { ChangeEvent } from "react";
 import { Card, CardContent, Button, Input, Badge } from "./ui";
 import { Upload, RotateCcw, FileSearch, Sparkles } from "lucide-react";
 import Papa from "papaparse";
+import { supabase } from "./supabaseClient";
 
 // --- Types & shims ---
 type Row = Record<string, string>;
@@ -206,6 +207,22 @@ const InquiryBlock: React.FC<{ answers: Answers }> = ({ answers }) => (
 
 // ---------- Main Component ----------
 export default function CsvChatbotExtended() {
+
+useEffect(() => {
+  (async () => {
+    // Try a cheap query to confirm connectivity & RLS policy
+    const { data, error } = await supabase
+      .from("bonds")
+      .select("state,city,bond_limit,name,premium")
+      .limit(1);
+    if (error) {
+      console.error("Supabase test FAILED:", error);
+    } else {
+      console.log("Supabase test OK. Sample row:", data?.[0] || "(none)");
+    }
+  })();
+}, []);
+
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [csv, setCsv] = useState<ParsedCsv | null>(null);
 
