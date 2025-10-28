@@ -31,7 +31,7 @@ type BondRow = {
 const QUESTION_CONFIG: Question[] = [
   { id: "q1", prompt: "Which state is the bond located in?", csvColumn: "state", mode: "equals", placeholder: "e.g., IL or Illinois", inputType: "text" },
   { id: "q2", prompt: "What is the name of the City?", csvColumn: "city", mode: "equals", placeholder: "e.g., Chicago", inputType: "text" },
-  { id: "q3", prompt: "What is the requested bonding limit amount?", csvColumn: "bond_limit", mode: "equals", placeholder: "e.g., $25,000", inputType: "number" },
+  { id: "q3", prompt: "What is the requested bonding limit amount?", csvColumn: "bond_limit", mode: "equals", placeholder: "e.g., 50000", inputType: "number" },
   { id: "q4", prompt: "Who is requesting the bond?", csvColumn: "name", mode: "equals", placeholder: "e.g., City of Chicago", inputType: "text" },
   { id: "q5", prompt: "What effective date should the bond be issued on?", placeholder: "YYYY-MM-DD", inputType: "date" },
 ];
@@ -248,7 +248,6 @@ export default function CsvChatbotExtended() {
           state, city, bond_limit: bondLimitNum, name: partyName,
         });
         if (resp.error) {
-          // Display a helpful hint; very commonly this is an RLS/policy issue.
           setQueryError(resp.error);
         }
         setPrimary(resp.match || null);
@@ -263,7 +262,6 @@ export default function CsvChatbotExtended() {
     run();
   }, [phase, answers.q1, answers.q2, answers.q3, answers.q4]);
 
- 
   /** ---------- UI ---------- */
   return (
     <div className="min-h-screen sm:p-6 p-4 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-200">
