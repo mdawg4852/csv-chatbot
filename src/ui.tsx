@@ -1,11 +1,10 @@
 import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 
-// Utility function for joining class names
+/* ------------------------- Utils ------------------------- */
+// Single cn helper (remove any duplicates further down the file)
 function cn(...classes: (string | false | null | undefined)[]) {
   return classes.filter(Boolean).join(" ");
 }
-
-import { forwardRef, type ButtonHTMLAttributes, type InputHTMLAttributes } from "react";
 
 /* ------------------------- Button ------------------------- */
 interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -105,9 +104,4 @@ export function Badge({ className, variant = "default", ...props }: BadgeProps) 
       {...props}
     />
   );
-}
-
-/* ------------------------- Utils ------------------------- */
-export function cn(...classes: (string | false | null | undefined)[]) {
-  return classes.filter(Boolean).join(" ");
 }
