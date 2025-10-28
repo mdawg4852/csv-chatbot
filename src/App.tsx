@@ -208,6 +208,9 @@ const InquiryBlock: React.FC<{ answers: Answers }> = ({ answers }) => (
 // ---------- Main Component ----------
 export default function CsvChatbotExtended() {
 
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [csv, setCsv] = useState<ParsedCsv | null>(null);
+
 useEffect(() => {
   (async () => {
     // Try a cheap query to confirm connectivity & RLS policy
@@ -222,9 +225,6 @@ useEffect(() => {
     }
   })();
 }, []);
-
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [csv, setCsv] = useState<ParsedCsv | null>(null);
 
   const [phase, setPhase] = useState<Phase>("qa"); // qa → summary → purchase → consent → delivery → done
 
