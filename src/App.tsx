@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent, Button, Input, Badge } from "./ui";
 import { RotateCcw, FileSearch, Sparkles } from "lucide-react";
+import { supabase } from "./supabaseClient";
 
 /** ---------- Types ---------- */
 type Answers = Record<string, string>;
@@ -30,7 +31,7 @@ type BondRow = {
 const QUESTION_CONFIG: Question[] = [
   { id: "q1", prompt: "Which state is the bond located in?", csvColumn: "state", mode: "equals", placeholder: "e.g., IL or Illinois", inputType: "text" },
   { id: "q2", prompt: "What is the name of the City?", csvColumn: "city", mode: "equals", placeholder: "e.g., Chicago", inputType: "text" },
-  { id: "q3", prompt: "What is the requested bonding limit amount?", csvColumn: "bond_limit", mode: "equals", placeholder: "e.g., 50000", inputType: "number" },
+  { id: "q3", prompt: "What is the requested bonding limit amount?", csvColumn: "bond_limit", mode: "equals", placeholder: "e.g., $25,000", inputType: "number" },
   { id: "q4", prompt: "Who is requesting the bond?", csvColumn: "name", mode: "equals", placeholder: "e.g., City of Chicago", inputType: "text" },
   { id: "q5", prompt: "What effective date should the bond be issued on?", placeholder: "YYYY-MM-DD", inputType: "date" },
 ];
@@ -113,21 +114,30 @@ function AddressAutocomplete({
   );
 }
 
-/** ---------- API call (serverless) ---------- */
-async function findExactBondViaApi(params: {
+/** ---------- Supabase (client-side) exact match ---------- */
+async function findExactBondClient(params: {
   state: string; city: string; bond_limit: number; name: string;
-}): Promise<BondRow | null> {
-  const res = await fetch("/api/query-bond", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  if (!res.ok) {
-    console.error("API error", await res.text());
-    return null;
+}): Promise<{ match: BondRow | null; error?: string }> {
+  try {
+    // Case-insensitive exact match for text (ilike without %), numeric equality on bond_limit
+    const { data, error } = await supabase
+      .from("bonds")
+      .select("state,city,name,bond_limit,premium")
+      .ilike("state", params.state.trim())
+      .ilike("city", params.city.trim())
+      .ilike("name", params.name.trim())
+      .eq("bond_limit", params.bond_limit)
+      .limit(1);
+
+    if (error) {
+      console.error("Supabase error:", error);
+      return { match: null, error: error.message };
+    }
+    return { match: (data && data.length > 0) ? (data[0] as BondRow) : null };
+  } catch (e: any) {
+    console.error("Supabase exception:", e?.message || e);
+    return { match: null, error: "client-exception" };
   }
-  const json = await res.json();
-  return json?.match ?? null;
 }
 
 /** ---------- Component ---------- */
@@ -144,6 +154,7 @@ export default function CsvChatbotExtended() {
   // Match
   const [primary, setPrimary] = useState<BondRow | null>(null);
   const [loadingMatch, setLoadingMatch] = useState(false);
+  const [queryError, setQueryError] = useState<string | null>(null);
 
   // Purchase
   const [purchase, setPurchase] = useState<Record<string, string>>({});
@@ -182,7 +193,7 @@ export default function CsvChatbotExtended() {
 
   function resetAll() {
     setPhase("qa"); setStep(0); setAnswers({}); setInput(""); setQError("");
-    setPrimary(null); setLoadingMatch(false);
+    setPrimary(null); setLoadingMatch(false); setQueryError(null);
     setPurchase({}); setPStep(0); setPError("");
     setDeliveryChoice(null); setDeliveryValue(""); setDeliveryError("");
   }
@@ -215,7 +226,7 @@ export default function CsvChatbotExtended() {
     setQError("");
   }
 
-  // Call API when entering "summary"
+  // Call Supabase when entering "summary"
   useEffect(() => {
     const run = async () => {
       if (phase !== "summary") return;
@@ -231,11 +242,23 @@ export default function CsvChatbotExtended() {
       }
 
       setLoadingMatch(true);
-      const row = await findExactBondViaApi({
-        state, city, bond_limit: bondLimitNum, name: partyName,
-      });
-      setPrimary(row);
-      setLoadingMatch(false);
+      setQueryError(null);
+      try {
+        const resp = await findExactBondClient({
+          state, city, bond_limit: bondLimitNum, name: partyName,
+        });
+        if (resp.error) {
+          // Display a helpful hint; very commonly this is an RLS/policy issue.
+          setQueryError(resp.error);
+        }
+        setPrimary(resp.match || null);
+      } catch (e) {
+        console.error("Unexpected summary search error:", e);
+        setPrimary(null);
+        setQueryError("Unexpected client error");
+      } finally {
+        setLoadingMatch(false);
+      }
     };
     run();
   }, [phase, answers.q1, answers.q2, answers.q3, answers.q4]);
@@ -245,9 +268,9 @@ export default function CsvChatbotExtended() {
   /** ---------- UI ---------- */
   return (
     <div className="min-h-screen sm:p-6 p-4 bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-950 text-slate-800 dark:text-slate-200">
-      <div className="mx-auto w-full max-w-6xl grid gap-4 sm:gap-6">
-        {/* Header */}
-        <header className="flex items-center justify-between flex-wrap gap-3">
+      <div className="mx-auto w-full max-w-3xl grid gap-4 sm:gap-6 text-center">
+        {/* Header (centered) */}
+        <header className="flex items-center justify-center">
           <div className="flex items-center gap-3">
             <Sparkles className="h-6 w-6 text-slate-700 dark:text-slate-300" />
             <h1 className="text-xl sm:text-2xl font-semibold">Bond Chatbot</h1>
@@ -256,7 +279,7 @@ export default function CsvChatbotExtended() {
 
         {/* Q&A */}
         {phase === "qa" && (
-          <Card className="dark:border-slate-700 dark:bg-slate-900/60">
+          <Card className="dark:border-slate-700 dark:bg-slate-900/60 text-left mx-auto">
             <CardContent className="sm:p-6 p-4 space-y-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="font-semibold">{QUESTION_CONFIG[step]?.prompt}</div>
@@ -273,12 +296,11 @@ export default function CsvChatbotExtended() {
                 className="dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-400"
               />
               {qError && <div className="text-red-600 dark:text-red-400 text-sm">{qError}</div>}
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap justify-center">
                 <Button onClick={submitAnswer}>Next</Button>
                 <Button variant="secondary" onClick={goBackQA} disabled={step === 0}>Back</Button>
                 <Button
                   variant="secondary"
-                  className="ml-auto"
                   onClick={() => { setStep(0); setAnswers({}); setInput(""); setQError(""); }}
                 >
                   <RotateCcw className="h-4 w-4" /> Reset
@@ -290,15 +312,15 @@ export default function CsvChatbotExtended() {
 
         {/* Summary / Inquiry */}
         {phase === "summary" && (
-          <Card className="dark:border-slate-700 dark:bg-slate-900/60">
+          <Card className="dark:border-slate-700 dark:bg-slate-900/60 text-left mx-auto">
             <CardContent className="sm:p-6 p-4 space-y-4">
               {loadingMatch ? (
-                <div className="text-slate-600 dark:text-slate-300 flex items-center gap-2">
+                <div className="text-slate-600 dark:text-slate-300 flex items-center gap-2 justify-center">
                   <FileSearch className="h-5 w-5" /> Searching for an exact match…
                 </div>
               ) : primary ? (
                 <>
-                  <div className="font-semibold text-lg">Bond Summary</div>
+                  <div className="font-semibold text-lg text-center">Bond Summary</div>
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div>Name: {String(primary.name ?? "")}</div>
@@ -319,29 +341,37 @@ export default function CsvChatbotExtended() {
                       <div>Effective Date: {answers.q5}</div>
                       <Button size="sm" variant="secondary" onClick={() => { setPhase("qa"); setStep(4); setInput(answers.q5 || ""); }}>Edit</Button>
                     </div>
-                    <div>Premium: {premiumDisplay}</div>
+                    <div>Premium: {formatMoney(primary.premium)}</div>
                   </div>
 
-                  <div className="mt-4">
+                  <div className="mt-4 text-center">
                     <div className="font-semibold mb-2">Have you reviewed enough information to make a decision?</div>
-                    <div className="flex gap-2 flex-wrap">
+                    <div className="flex gap-2 flex-wrap justify-center">
                       <Button onClick={() => setPhase("purchase")}>Yes</Button>
                       <Button variant="secondary" onClick={() => setPhase("qa")}>No</Button>
-                      <Button variant="secondary" className="ml-auto" onClick={() => setPhase("qa")}>Back</Button>
+                      <Button variant="secondary" onClick={() => setPhase("qa")}>Back</Button>
                     </div>
                   </div>
                 </>
               ) : (
-                <div
-                  className="rounded-xl border border-dashed p-3 sm:p-4 dark:border-slate-700"
-                  style={{ borderColor: "rgb(203 213 225)" }}
-                >
-                  <div className="text-sm">No exact match found. We’ll route this inquiry to a service rep.</div>
-                  <pre className="text-xs sm:text-sm mt-3 overflow-auto">{JSON.stringify(answers, null, 2)}</pre>
-                  <div className="mt-3">
-                    <Button variant="secondary" onClick={() => setPhase("qa")}>Back</Button>
+                <>
+                  {queryError && (
+                    <div className="text-amber-600 dark:text-amber-400 text-sm text-center">
+                      Note: Supabase returned an error: <span className="font-mono">{queryError}</span>.  
+                      If this persists, verify RLS/policies and column types.
+                    </div>
+                  )}
+                  <div
+                    className="rounded-xl border border-dashed p-3 sm:p-4 dark:border-slate-700"
+                    style={{ borderColor: "rgb(203 213 225)" }}
+                  >
+                    <div className="text-sm">No exact match found. We’ll route this inquiry to a service rep.</div>
+                    <pre className="text-xs sm:text-sm mt-3 overflow-auto">{JSON.stringify(answers, null, 2)}</pre>
+                    <div className="mt-3 text-center">
+                      <Button variant="secondary" onClick={() => setPhase("qa")}>Back</Button>
+                    </div>
                   </div>
-                </div>
+                </>
               )}
             </CardContent>
           </Card>
@@ -349,7 +379,7 @@ export default function CsvChatbotExtended() {
 
         {/* Purchase */}
         {phase === "purchase" && (
-          <Card className="dark:border-slate-700 dark:bg-slate-900/60">
+          <Card className="dark:border-slate-700 dark:bg-slate-900/60 text-left mx-auto">
             <CardContent className="sm:p-6 p-4 space-y-4">
               <div className="flex items-center justify-between gap-3 flex-wrap">
                 <div className="font-semibold">Purchase Information</div>
@@ -375,7 +405,7 @@ export default function CsvChatbotExtended() {
                 />
               )}
               {pError && <div className="text-red-600 dark:text-red-400 text-sm">{pError}</div>}
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap justify-center">
                 <Button onClick={() => {
                   const field = PURCHASE_FIELDS[pStep];
                   const val = (purchase[field.id] || "").toString().trim();
@@ -394,16 +424,16 @@ export default function CsvChatbotExtended() {
 
         {/* Consent */}
         {phase === "consent" && (
-          <Card className="dark:border-slate-700 dark:bg-slate-900/60">
+          <Card className="dark:border-slate-700 dark:bg-slate-900/60 text-left mx-auto">
             <CardContent className="sm:p-6 p-4 space-y-3">
               <div className="font-semibold">Text & Call Consent</div>
               <p className="text-sm text-slate-600 dark:text-slate-300">
                 By providing your phone number, you consent to receive calls and text messages related to your bond and related services, including payment and renewal reminders. Message and data rates may apply. Consent is not a condition of purchase. You can opt out at any time by replying STOP.
               </p>
-              <div className="flex gap-2 flex-wrap">
+              <div className="flex gap-2 flex-wrap justify-center">
                 <Button onClick={() => setPhase("delivery")}>I Agree</Button>
                 <Button variant="secondary" onClick={() => setPhase("delivery")}>I Do Not Agree</Button>
-                <Button variant="secondary" className="ml-auto" onClick={() => setPhase("purchase")}>Back</Button>
+                <Button variant="secondary" onClick={() => setPhase("purchase")}>Back</Button>
               </div>
             </CardContent>
           </Card>
@@ -411,16 +441,16 @@ export default function CsvChatbotExtended() {
 
         {/* Delivery */}
         {phase === "delivery" && (
-          <Card className="dark:border-slate-700 dark:bg-slate-900/60">
+          <Card className="dark:border-slate-700 dark:bg-slate-900/60 text-left mx-auto">
             <CardContent className="sm:p-6 p-4 space-y-4">
               {!deliveryChoice ? (
                 <>
                   <div className="font-semibold">Delivery Preference</div>
                   <p>Would you like the secure payment link sent via text or email?</p>
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap justify-center">
                     <Button onClick={() => setDeliveryChoice("text")}>Text</Button>
                     <Button onClick={() => setDeliveryChoice("email")}>Email</Button>
-                    <Button variant="secondary" className="ml-auto" onClick={() => setPhase("consent")}>Back</Button>
+                    <Button variant="secondary" onClick={() => setPhase("consent")}>Back</Button>
                   </div>
                 </>
               ) : (
@@ -437,7 +467,7 @@ export default function CsvChatbotExtended() {
                     className="dark:bg-slate-800 dark:text-slate-100 dark:placeholder-slate-400"
                   />
                   {deliveryError && <div className="text-red-600 dark:text-red-400 text-sm">{deliveryError}</div>}
-                  <div className="flex gap-2 flex-wrap">
+                  <div className="flex gap-2 flex-wrap justify-center">
                     <Button onClick={() => {
                       if (deliveryChoice === "text") {
                         const v = deliveryValue || purchase["contactPhone"] || "";
@@ -460,11 +490,13 @@ export default function CsvChatbotExtended() {
 
         {/* Done */}
         {phase === "done" && (
-          <Card className="dark:border-slate-700 dark:bg-slate-900/60">
+          <Card className="dark:border-slate-700 dark:bg-slate-900/60 text-left mx-auto">
             <CardContent className="sm:p-6 p-4 space-y-3">
-              <div className="font-semibold text-lg">Process Complete</div>
-              <p>The secure payment link will be sent via {deliveryChoice || "email"} to {deliveryValue}.</p>
-              <Button variant="secondary" onClick={resetAll}><RotateCcw className="h-4 w-4" /> Start Over</Button>
+              <div className="font-semibold text-lg text-center">Process Complete</div>
+              <p className="text-center">The secure payment link will be sent via {deliveryChoice || "email"} to {deliveryValue}.</p>
+              <div className="flex justify-center">
+                <Button variant="secondary" onClick={resetAll}><RotateCcw className="h-4 w-4" /> Start Over</Button>
+              </div>
             </CardContent>
           </Card>
         )}
