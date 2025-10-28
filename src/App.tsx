@@ -503,9 +503,7 @@ export default function CsvChatbotExtended() {
           <Card>
             <CardContent className="p-6 space-y-3">
               <div className="font-semibold">Text & Call Consent</div>
-              <p className="text-sm text-slate-600">
-                By providing your phone number, you consent to receive calls and text messages related to your bond and related services, including payment and renewal reminders. Message and data rates may apply. Consent is not a condition of purchase. You can opt out at any time by replying STOP.
-              </p>
+              <p className="text-sm text-slate-600">{disclaimer}</p>
               <div className="flex gap-2">
                 <Button onClick={() => setPhase("delivery")}>I Agree</Button>
                 <Button variant="secondary" onClick={() => setPhase("delivery")}>I Do Not Agree</Button>
